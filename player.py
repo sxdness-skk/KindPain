@@ -42,7 +42,8 @@ class Player(pygame.sprite.Sprite):
         self.death_timer = 0
         self.death_duration = 120
 
-        self.weapon_sprite = None
+        self.gun_sprite = None
+        self.gun_offset = (0, 0)
         self.load_weapon()
 
     def load_animations(self):
@@ -63,8 +64,8 @@ class Player(pygame.sprite.Sprite):
 
     def load_weapon(self):
         weapon_path = os.path.join(BASE_PATH, "Player", "Weapon", "Gun")
-        gun_img = pygame.image.load(os.path.join(weapon_path, "gun_1.png")).convert_alpha()
-        self.weapon_sprite = pygame.transform.scale(gun_img, (25, 15))
+        self.gun_sprite = pygame.image.load(os.path.join(weapon_path, "gun_1.png")).convert_alpha()
+        self.gun_sprite = pygame.transform.scale(self.gun_sprite, (32, 20))
 
     def update(self, platforms, enemies=None):
         if not self.alive:
@@ -107,6 +108,15 @@ class Player(pygame.sprite.Sprite):
 
         self.image = self.animations[self.direction][self.frame_index]
 
+        if self.direction == "right":
+            self.gun_offset = (35, 32)
+        elif self.direction == "left":
+            self.gun_offset = (-3, 32)
+        elif self.direction == "up":
+            self.gun_offset = (20, 12)
+        elif self.direction == "down":
+            self.gun_offset = (20, 50)
+
     def check_collision(self, platforms, direction):
         for platform in platforms:
             if self.rect.colliderect(platform.rect):
@@ -133,17 +143,38 @@ class Player(pygame.sprite.Sprite):
 
         self.attack_cooldown = ATTACK_COOLDOWN
 
-        dx = (target_x + camera_x) - self.rect.centerx
-        dy = (target_y + camera_y) - self.rect.centery
+        gun_x = self.rect.x + self.gun_offset[0] + 16
+        gun_y = self.rect.y + self.gun_offset[1] + 10
+
+        dx = (target_x + camera_x) - gun_x
+        dy = (target_y + camera_y) - gun_y
         dist = (dx ** 2 + dy ** 2) ** 0.5
         if dist == 0:
             dist = 1
         dx /= dist
         dy /= dist
 
-        bullet = Bullet(self.rect.centerx, self.rect.centery, dx, dy)
+        bullet = Bullet(gun_x, gun_y, dx, dy)
         self.bullets.add(bullet)
         return bullet
+
+    def draw_gun(self, screen, camera_x, camera_y):
+        if self.gun_sprite is None:
+            return
+
+        gun_x = self.rect.x + self.gun_offset[0] - camera_x
+        gun_y = self.rect.y + self.gun_offset[1] - camera_y
+
+        if self.direction == "left":
+            gun_img = pygame.transform.flip(self.gun_sprite, True, False)
+        elif self.direction == "up":
+            gun_img = pygame.transform.rotate(self.gun_sprite, 90)
+        elif self.direction == "down":
+            gun_img = pygame.transform.rotate(self.gun_sprite, -90)
+        else:
+            gun_img = self.gun_sprite
+
+        screen.blit(gun_img, (gun_x, gun_y))
 
     def take_damage(self, damage):
         if not self.alive:

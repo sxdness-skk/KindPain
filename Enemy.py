@@ -42,19 +42,19 @@ class Enemy(pygame.sprite.Sprite):
         enemies_path = os.path.join(BASE_PATH, "Enemies")
 
         self.idle_frame = pygame.image.load(os.path.join(enemies_path, "Enemy11.png")).convert_alpha()
-        self.idle_frame = pygame.transform.scale(self.idle_frame, (48, 48))
+        self.idle_frame = pygame.transform.scale(self.idle_frame, (64, 64))
 
         for i in range(1, 5):
             img = pygame.image.load(os.path.join(enemies_path, f"Enemy1{i}.png")).convert_alpha()
-            img = pygame.transform.scale(img, (48, 48))
+            img = pygame.transform.scale(img, (64, 64))
             self.walk_frames.append(img)
 
         bite14 = pygame.image.load(os.path.join(enemies_path, "Enemy14.png")).convert_alpha()
-        bite14 = pygame.transform.scale(bite14, (48, 48))
+        bite14 = pygame.transform.scale(bite14, (64, 64))
         self.bite_frames.append(bite14)
 
         bite15 = pygame.image.load(os.path.join(enemies_path, "Enemy15.png")).convert_alpha()
-        bite15 = pygame.transform.scale(bite15, (48, 48))
+        bite15 = pygame.transform.scale(bite15, (64, 64))
         self.bite_frames.append(bite15)
 
     def update(self, player, platforms):

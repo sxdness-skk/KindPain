@@ -1,6 +1,7 @@
 import pygame
 import os
 import math
+import random
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), "Image")
 
@@ -41,19 +42,19 @@ class Enemy(pygame.sprite.Sprite):
         enemies_path = os.path.join(BASE_PATH, "Enemies")
 
         self.idle_frame = pygame.image.load(os.path.join(enemies_path, "Enemy11.png")).convert_alpha()
-        self.idle_frame = pygame.transform.scale(self.idle_frame, (64, 64))
+        self.idle_frame = pygame.transform.scale(self.idle_frame, (48, 48))
 
         for i in range(1, 5):
             img = pygame.image.load(os.path.join(enemies_path, f"Enemy1{i}.png")).convert_alpha()
-            img = pygame.transform.scale(img, (64, 64))
+            img = pygame.transform.scale(img, (48, 48))
             self.walk_frames.append(img)
 
         bite14 = pygame.image.load(os.path.join(enemies_path, "Enemy14.png")).convert_alpha()
-        bite14 = pygame.transform.scale(bite14, (64, 64))
+        bite14 = pygame.transform.scale(bite14, (48, 48))
         self.bite_frames.append(bite14)
 
         bite15 = pygame.image.load(os.path.join(enemies_path, "Enemy15.png")).convert_alpha()
-        bite15 = pygame.transform.scale(bite15, (64, 64))
+        bite15 = pygame.transform.scale(bite15, (48, 48))
         self.bite_frames.append(bite15)
 
     def update(self, player, platforms):
@@ -156,7 +157,15 @@ class Enemy(pygame.sprite.Sprite):
                         self.rect.top = platform.rect.bottom
                     self.vel_y = 0
 
-    def take_damage(self, damage):
+    def take_damage(self, damage, pickups_group=None):
         self.hp -= damage
         if self.hp <= 0:
+            if pickups_group is not None:
+                if random.random() < 0.5:
+                    pickup_type = "heal"
+                else:
+                    pickup_type = "shield"
+                from pickup import Pickup
+                pickup = Pickup(self.rect.centerx, self.rect.centery, pickup_type)
+                pickups_group.add(pickup)
             self.kill()

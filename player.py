@@ -67,10 +67,10 @@ class Player(pygame.sprite.Sprite):
         self.gun_sprite = pygame.image.load(os.path.join(weapon_path, "gun_1.png")).convert_alpha()
         self.gun_sprite = pygame.transform.scale(self.gun_sprite, (32, 20))
 
-    def update(self, platforms, enemies=None):
+    def update(self, platforms, enemies=None, pickups=None):
         if not self.alive:
             self.death_timer += 1
-            self.bullets.update(platforms, enemies)
+            self.bullets.update(platforms, enemies, pickups)
             return
 
         self.rect.x += self.vel_x
@@ -84,7 +84,7 @@ class Player(pygame.sprite.Sprite):
         if self.attack_cooldown > 0:
             self.attack_cooldown -= 1
 
-        self.bullets.update(platforms, enemies)
+        self.bullets.update(platforms, enemies, pickups)
 
     def update_animation(self):
         if self.vel_x < 0:
@@ -243,7 +243,7 @@ class Bullet(pygame.sprite.Sprite):
 
         self.damage = 1
 
-    def update(self, platforms=None, enemies=None):
+    def update(self, platforms=None, enemies=None, pickups=None):
         self.rect.x += self.dx
         self.rect.y += self.dy
 
@@ -256,6 +256,6 @@ class Bullet(pygame.sprite.Sprite):
         if enemies:
             for enemy in enemies:
                 if self.rect.colliderect(enemy.rect):
-                    enemy.take_damage(self.damage)
+                    enemy.take_damage(self.damage, pickups)
                     self.kill()
                     return

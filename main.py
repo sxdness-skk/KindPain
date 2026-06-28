@@ -12,48 +12,81 @@ from pickup import Pickup
 current_level = 1
 wave = 1
 wave_spawned = False
+door = None
+weapon_pickup = None
 
 
-def get_spawn_positions(level_num, wave_num):
-    if level_num == 1:
-        if wave_num == 1:
-            return [(400, 200), (700, 200), (550, 300)]
-        elif wave_num == 2:
-            return [(350, 200), (650, 250), (750, 350), (500, 400)]
-        elif wave_num == 3:
-            return [(300, 200), (600, 200), (800, 300), (450, 350), (700, 400), (550, 250)]
-    elif level_num == 2:
-        if wave_num == 1:
-            return [(300, 300), (500, 300), (400, 400)]
-        elif wave_num == 2:
-            return [(300, 250), (500, 250), (400, 350), (600, 400)]
-        elif wave_num == 3:
-            return [(250, 200), (450, 200), (650, 250), (350, 350), (550, 350), (400, 450)]
-    elif level_num == 3:
-        if wave_num == 1:
-            return [(400, 250), (600, 250), (500, 350)]
-        elif wave_num == 2:
-            return [(350, 200), (550, 200), (450, 300), (650, 350)]
-        elif wave_num == 3:
-            return [(300, 200), (500, 200), (700, 200), (400, 350), (600, 350), (500, 450)]
-    return [(400, 300)]
+def get_empty_positions(level_num):
+    level_data = level_list[level_num]
+    empty_positions = []
+    for row in range(2, len(level_data) - 2):
+        for col in range(2, len(level_data[row]) - 2):
+            if level_data[row][col] == 0:
+                if (level_data[row-1][col] == 0 and level_data[row+1][col] == 0 and
+                    level_data[row][col-1] == 0 and level_data[row][col+1] == 0):
+                    x = col * TILE_SIZE + TILE_SIZE // 2
+                    y = row * TILE_SIZE + TILE_SIZE // 2
+                    empty_positions.append((x, y))
+    return empty_positions
 
 
 def spawn_wave():
     global wave_spawned
     enemies.empty()
 
-    positions = get_spawn_positions(current_level, wave)
+    positions = get_empty_positions(current_level)
+    random.shuffle(positions)
 
+    count = 0
+    if wave == 1:
+        count = 3
+    elif wave == 2:
+        count = 4
+    elif wave == 3:
+        count = 6
+
+    spawned = 0
     for x, y in positions:
+        if spawned >= count:
+            break
         enemy = Enemy(x, y)
         enemies.add(enemy)
+        spawned += 1
 
     wave_spawned = True
 
 
+def spawn_door():
+    global door, weapon_pickup
+    door = pygame.sprite.Sprite()
+    door.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
+    door.image.fill((139, 90, 43))
+    door.rect = door.image.get_rect()
+    door.rect.centerx = level_width // 2
+    door.rect.centery = level_height // 2
+
+    if current_level == 1:
+        weapon_pickup = WeaponPickup(level_width // 2, level_height // 2 - TILE_SIZE, "PP")
+    elif current_level == 2:
+        weapon_pickup = WeaponPickup(level_width // 2, level_height // 2 - TILE_SIZE, "AK")
+    else:
+        weapon_pickup = None
+
+
+class WeaponPickup(pygame.sprite.Sprite):
+    def __init__(self, x, y, weapon_type):
+        super().__init__()
+        self.weapon_type = weapon_type
+        weapon_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun")
+        self.image = pygame.image.load(os.path.join(weapon_path, f"{weapon_type}.png")).convert_alpha()
+        self.image = pygame.transform.scale(self.image, (48, 30))
+        self.rect = self.image.get_rect()
+        self.rect.centerx = x
+        self.rect.centery = y
+
+
 def load_level(level_num):
-    global level_width, level_height, platforms, enemies, pickups, wave, wave_spawned
+    global level_width, level_height, platforms, enemies, pickups, wave, wave_spawned, door, weapon_pickup
     level_data = level_list[level_num]
     platforms.empty()
     enemies.empty()
@@ -75,6 +108,8 @@ def load_level(level_num):
 
     wave = 1
     wave_spawned = False
+    door = None
+    weapon_pickup = None
 
 
 pygame.init()
@@ -90,7 +125,7 @@ crosshair_img = pygame.transform.scale(crosshair_img, (32, 32))
 
 def main():
     global current_level, player, platforms, enemies, pickups, level_width, level_height
-    global wave, wave_spawned
+    global wave, wave_spawned, door, weapon_pickup
 
     player = Player(100, 400)
     platforms = pygame.sprite.Group()
@@ -119,7 +154,12 @@ def main():
                         current_level = 1
                     load_level(current_level)
                     player.respawn()
-
+                if event.key == pygame.K_1:
+                    player.switch_weapon(0)
+                if event.key == pygame.K_2:
+                    player.switch_weapon(1)
+                if event.key == pygame.K_3:
+                    player.switch_weapon(2)
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 player.shoot(mouse_x, mouse_y, camera_x, camera_y)
@@ -142,21 +182,29 @@ def main():
             spawn_wave()
 
         for enemy in enemies:
-            enemy.update(player, platforms)
+            pickup = enemy.update(player, platforms)
+            if pickup is not None:
+                pickups.add(pickup)
 
         for pickup in pickups:
-            pickup.update(player)
+            pickup.update()
 
         if len(enemies) == 0 and wave_spawned:
             wave += 1
             wave_spawned = False
             if wave > 3:
-                wave = 1
-                current_level += 1
-                if current_level > len(level_list):
-                    current_level = 1
-                load_level(current_level)
-                player.respawn()
+                spawn_door()
+
+        if weapon_pickup and player.alive and player.rect.colliderect(weapon_pickup.rect):
+            player.set_weapon(weapon_pickup.weapon_type)
+            weapon_pickup = None
+
+        if door and player.alive and player.rect.colliderect(door.rect):
+            current_level += 1
+            if current_level > len(level_list):
+                current_level = 1
+            load_level(current_level)
+            player.respawn()
 
         player.update(platforms, enemies, pickups)
 
@@ -175,11 +223,11 @@ def main():
         for platform in platforms:
             screen.blit(platform.image, (platform.rect.x - camera_x, platform.rect.y - camera_y))
 
-        for pickup in pickups:
-            screen.blit(pickup.image, (pickup.rect.x - camera_x, pickup.rect.y - camera_y))
-
         for enemy in enemies:
             screen.blit(enemy.image, (enemy.rect.x - camera_x, enemy.rect.y - camera_y))
+
+        for pickup in pickups:
+            screen.blit(pickup.image, (pickup.rect.x - camera_x, pickup.rect.y - camera_y))
 
         if player.alive:
             screen.blit(player.image, (player.rect.x - camera_x, player.rect.y - camera_y))
@@ -190,6 +238,12 @@ def main():
 
         for bullet in player.bullets:
             screen.blit(bullet.image, (bullet.rect.x - camera_x, bullet.rect.y - camera_y))
+
+        if weapon_pickup:
+            screen.blit(weapon_pickup.image, (weapon_pickup.rect.x - camera_x, weapon_pickup.rect.y - camera_y))
+
+        if door:
+            screen.blit(door.image, (door.rect.x - camera_x, door.rect.y - camera_y))
 
         player.draw_ui(screen)
 

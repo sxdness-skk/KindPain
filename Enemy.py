@@ -12,7 +12,7 @@ class Enemy(pygame.sprite.Sprite):
 
         self.idle_frame = None
         self.walk_frames = []
-        self.bite_frames = []
+        self.attack_frames = []
         self.load_animations()
 
         self.state = "idle"
@@ -33,10 +33,11 @@ class Enemy(pygame.sprite.Sprite):
 
         self.direction = "right"
         self.attack_cooldown = 0
-        self.bite_lock = False
+        self.attack_lock = False
         self.target = None
         self.aggro_range = 500
         self.attack_range = 50
+        self.alive = True
 
     def load_animations(self):
         enemies_path = os.path.join(BASE_PATH, "Enemies")
@@ -49,18 +50,16 @@ class Enemy(pygame.sprite.Sprite):
             img = pygame.transform.scale(img, (64, 64))
             self.walk_frames.append(img)
 
-        bite14 = pygame.image.load(os.path.join(enemies_path, "Enemy14.png")).convert_alpha()
-        bite14 = pygame.transform.scale(bite14, (64, 64))
-        self.bite_frames.append(bite14)
-
-        bite15 = pygame.image.load(os.path.join(enemies_path, "Enemy15.png")).convert_alpha()
-        bite15 = pygame.transform.scale(bite15, (64, 64))
-        self.bite_frames.append(bite15)
+        for i in range(1, 6):
+            img = pygame.image.load(os.path.join(enemies_path, f"Atack_{i}.png")).convert_alpha()
+            img = pygame.transform.scale(img, (64, 64))
+            self.attack_frames.append(img)
 
     def update(self, player, platforms):
-        if self.hp <= 0:
+        if not self.alive:
+            pickup = self.drop_pickup()
             self.kill()
-            return
+            return pickup
 
         if not player.alive:
             self.target = None
@@ -68,7 +67,7 @@ class Enemy(pygame.sprite.Sprite):
             self.vel_x = 0
             self.vel_y = 0
             self.update_animation()
-            return
+            return None
 
         dist_to_player = math.hypot(player.rect.centerx - self.rect.centerx,
                                     player.rect.centery - self.rect.centery)
@@ -84,15 +83,15 @@ class Enemy(pygame.sprite.Sprite):
         if self.attack_cooldown > 0:
             self.attack_cooldown -= 1
 
-        if self.target and not self.bite_lock:
+        if self.target and not self.attack_lock:
             if dist_to_player <= self.attack_range:
                 self.vel_x = 0
                 self.vel_y = 0
                 if self.attack_cooldown <= 0:
-                    self.state = "bite"
+                    self.state = "attack"
                     self.frame_index = 0
                     self.animation_timer = 0
-                    self.bite_lock = True
+                    self.attack_lock = True
                     self.target.take_damage(self.damage)
                     self.attack_cooldown = 60
             else:
@@ -116,6 +115,7 @@ class Enemy(pygame.sprite.Sprite):
         self.check_collision(platforms, 'y')
 
         self.update_animation()
+        return None
 
     def update_animation(self):
         if self.state == "walk":
@@ -124,16 +124,16 @@ class Enemy(pygame.sprite.Sprite):
                 self.animation_timer = 0
                 self.frame_index = (self.frame_index + 1) % 4
             self.image = self.walk_frames[self.frame_index]
-        elif self.state == "bite":
+        elif self.state == "attack":
             self.animation_timer += 1
-            if self.animation_timer >= 30:
+            if self.animation_timer >= 12:
                 self.animation_timer = 0
                 self.frame_index += 1
-                if self.frame_index >= 2:
+                if self.frame_index >= 5:
                     self.frame_index = 0
                     self.state = "idle"
-                    self.bite_lock = False
-            self.image = self.bite_frames[self.frame_index]
+                    self.attack_lock = False
+            self.image = self.attack_frames[self.frame_index]
         else:
             self.image = self.idle_frame
 
@@ -157,15 +157,18 @@ class Enemy(pygame.sprite.Sprite):
                         self.rect.top = platform.rect.bottom
                     self.vel_y = 0
 
-    def take_damage(self, damage, pickups_group=None):
+    def take_damage(self, damage):
         self.hp -= damage
         if self.hp <= 0:
-            if pickups_group is not None:
-                if random.random() < 0.5:
-                    pickup_type = "heal"
-                else:
-                    pickup_type = "shield"
-                from pickup import Pickup
-                pickup = Pickup(self.rect.centerx, self.rect.centery, pickup_type)
-                pickups_group.add(pickup)
-            self.kill()
+            self.alive = False
+
+    def drop_pickup(self):
+        from pickup import Pickup
+        roll = random.random()
+        if roll < 0.4:
+            pickup = Pickup(self.rect.centerx, self.rect.centery, "hp")
+            return pickup
+        elif roll < 0.7:
+            pickup = Pickup(self.rect.centerx, self.rect.centery, "armor")
+            return pickup
+        return None

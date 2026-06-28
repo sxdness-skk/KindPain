@@ -1,6 +1,6 @@
 import pygame
 import os
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, ENERGY_REGEN_RATE
 
 ATTACK_COOLDOWN = 15
 
@@ -42,9 +42,15 @@ class Player(pygame.sprite.Sprite):
         self.death_timer = 0
         self.death_duration = 120
 
-        self.gun_sprite = None
+        self.weapon_type = "gun"
+        self.gun_sprites = {}
+        self.bullet_sprites = {}
+        self.current_gun_sprite = None
+        self.current_bullet_sprite = None
         self.gun_offset = (0, 0)
-        self.load_weapon()
+        self.weapon_energy_cost = 0
+        self.unlocked_weapons = ["gun"]
+        self.load_weapons()
 
     def load_animations(self):
         anim_left_path = os.path.join(BASE_PATH, "Player", "Anim_left")
@@ -62,15 +68,51 @@ class Player(pygame.sprite.Sprite):
         self.animations["up"] = self.animations["right"].copy()
         self.animations["down"] = self.animations["right"].copy()
 
-    def load_weapon(self):
+    def load_weapons(self):
         weapon_path = os.path.join(BASE_PATH, "Player", "Weapon", "Gun")
-        self.gun_sprite = pygame.image.load(os.path.join(weapon_path, "gun_1.png")).convert_alpha()
-        self.gun_sprite = pygame.transform.scale(self.gun_sprite, (32, 20))
+
+        self.gun_sprites["gun"] = pygame.image.load(os.path.join(weapon_path, "gun_1.png")).convert_alpha()
+        self.gun_sprites["gun"] = pygame.transform.scale(self.gun_sprites["gun"], (32, 20))
+        self.bullet_sprites["gun"] = pygame.image.load(os.path.join(weapon_path, "bullet.png")).convert_alpha()
+        self.bullet_sprites["gun"] = pygame.transform.scale(self.bullet_sprites["gun"], (16, 16))
+
+        self.gun_sprites["PP"] = pygame.image.load(os.path.join(weapon_path, "PP.png")).convert_alpha()
+        self.gun_sprites["PP"] = pygame.transform.scale(self.gun_sprites["PP"], (32, 20))
+        self.bullet_sprites["PP"] = pygame.image.load(os.path.join(weapon_path, "Bullet_pp.png")).convert_alpha()
+        self.bullet_sprites["PP"] = pygame.transform.scale(self.bullet_sprites["PP"], (16, 16))
+
+        self.gun_sprites["AK"] = pygame.image.load(os.path.join(weapon_path, "AK.png")).convert_alpha()
+        self.gun_sprites["AK"] = pygame.transform.scale(self.gun_sprites["AK"], (32, 20))
+        self.bullet_sprites["AK"] = pygame.image.load(os.path.join(weapon_path, "Bullet_AK.png")).convert_alpha()
+        self.bullet_sprites["AK"] = pygame.transform.scale(self.bullet_sprites["AK"], (16, 16))
+
+        self.current_gun_sprite = self.gun_sprites["gun"]
+        self.current_bullet_sprite = self.bullet_sprites["gun"]
+        self.weapon_energy_cost = 0
+
+    def set_weapon(self, weapon_type):
+        if weapon_type in self.gun_sprites:
+            self.weapon_type = weapon_type
+            self.current_gun_sprite = self.gun_sprites[weapon_type]
+            self.current_bullet_sprite = self.bullet_sprites[weapon_type]
+            if weapon_type == "PP":
+                self.weapon_energy_cost = 2
+            elif weapon_type == "AK":
+                self.weapon_energy_cost = 5
+            else:
+                self.weapon_energy_cost = 0
+            if weapon_type not in self.unlocked_weapons:
+                self.unlocked_weapons.append(weapon_type)
+
+    def switch_weapon(self, slot):
+        weapons = ["gun", "PP", "AK"]
+        if slot < len(weapons) and weapons[slot] in self.unlocked_weapons:
+            self.set_weapon(weapons[slot])
 
     def update(self, platforms, enemies=None, pickups=None):
         if not self.alive:
             self.death_timer += 1
-            self.bullets.update(platforms, enemies, pickups)
+            self.bullets.update(platforms, enemies)
             return
 
         self.rect.x += self.vel_x
@@ -84,7 +126,18 @@ class Player(pygame.sprite.Sprite):
         if self.attack_cooldown > 0:
             self.attack_cooldown -= 1
 
-        self.bullets.update(platforms, enemies, pickups)
+        self.energy = min(self.energy + ENERGY_REGEN_RATE, self.max_energy)
+
+        self.bullets.update(platforms, enemies)
+
+        if pickups:
+            for pickup in pickups:
+                if self.rect.colliderect(pickup.rect):
+                    if pickup.pickup_type == "hp":
+                        self.hp = min(self.hp + pickup.heal_amount, self.max_hp)
+                    elif pickup.pickup_type == "armor":
+                        self.armor = min(self.armor + pickup.armor_amount, self.max_armor)
+                    pickup.kill()
 
     def update_animation(self):
         if self.vel_x < 0:
@@ -141,7 +194,11 @@ class Player(pygame.sprite.Sprite):
         if self.attack_cooldown > 0:
             return None
 
+        if self.weapon_energy_cost > 0 and self.energy < self.weapon_energy_cost:
+            return None
+
         self.attack_cooldown = ATTACK_COOLDOWN
+        self.energy -= self.weapon_energy_cost
 
         gun_x = self.rect.x + self.gun_offset[0] + 16
         gun_y = self.rect.y + self.gun_offset[1] + 10
@@ -154,25 +211,25 @@ class Player(pygame.sprite.Sprite):
         dx /= dist
         dy /= dist
 
-        bullet = Bullet(gun_x, gun_y, dx, dy)
+        bullet = Bullet(gun_x, gun_y, dx, dy, self.current_bullet_sprite)
         self.bullets.add(bullet)
         return bullet
 
     def draw_gun(self, screen, camera_x, camera_y):
-        if self.gun_sprite is None:
+        if self.current_gun_sprite is None:
             return
 
         gun_x = self.rect.x + self.gun_offset[0] - camera_x
         gun_y = self.rect.y + self.gun_offset[1] - camera_y
 
         if self.direction == "left":
-            gun_img = pygame.transform.flip(self.gun_sprite, True, False)
+            gun_img = pygame.transform.flip(self.current_gun_sprite, True, False)
         elif self.direction == "up":
-            gun_img = pygame.transform.rotate(self.gun_sprite, 90)
+            gun_img = pygame.transform.rotate(self.current_gun_sprite, 90)
         elif self.direction == "down":
-            gun_img = pygame.transform.rotate(self.gun_sprite, -90)
+            gun_img = pygame.transform.rotate(self.current_gun_sprite, -90)
         else:
-            gun_img = self.gun_sprite
+            gun_img = self.current_gun_sprite
 
         screen.blit(gun_img, (gun_x, gun_y))
 
@@ -207,6 +264,7 @@ class Player(pygame.sprite.Sprite):
         self.alive = True
         self.hp = self.max_hp
         self.armor = 0
+        self.energy = self.max_energy
         self.death_timer = 0
         self.vel_x = 0
         self.vel_y = 0
@@ -220,19 +278,15 @@ class Player(pygame.sprite.Sprite):
         armor_text = font.render(f"Armor: {self.armor}/{self.max_armor}", True, (50, 150, 255))
         screen.blit(armor_text, (10, 35))
 
-        energy_text = font.render(f"Energy: {self.energy}/{self.max_energy}", True, (255, 200, 50))
+        energy_text = font.render(f"Energy: {int(self.energy)}/{self.max_energy}", True, (255, 200, 50))
         screen.blit(energy_text, (10, 60))
 
 
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, x, y, dx, dy):
+    def __init__(self, x, y, dx, dy, sprite):
         super().__init__()
 
-        bullet_path = os.path.join(BASE_PATH, "Player", "Weapon", "Gun", "bullet.png")
-
-        self.image = pygame.image.load(bullet_path).convert_alpha()
-        self.image = pygame.transform.scale(self.image, (20, 20))
-
+        self.image = sprite.copy()
         self.rect = self.image.get_rect()
         self.rect.centerx = x
         self.rect.centery = y
@@ -243,7 +297,7 @@ class Bullet(pygame.sprite.Sprite):
 
         self.damage = 1
 
-    def update(self, platforms=None, enemies=None, pickups=None):
+    def update(self, platforms=None, enemies=None):
         self.rect.x += self.dx
         self.rect.y += self.dy
 
@@ -256,6 +310,6 @@ class Bullet(pygame.sprite.Sprite):
         if enemies:
             for enemy in enemies:
                 if self.rect.colliderect(enemy.rect):
-                    enemy.take_damage(self.damage, pickups)
+                    enemy.take_damage(self.damage)
                     self.kill()
                     return

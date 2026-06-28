@@ -79,12 +79,12 @@ class Player(pygame.sprite.Sprite):
         self.gun_sprites["PP"] = pygame.image.load(os.path.join(weapon_path, "PP.png")).convert_alpha()
         self.gun_sprites["PP"] = pygame.transform.scale(self.gun_sprites["PP"], (32, 20))
         self.bullet_sprites["PP"] = pygame.image.load(os.path.join(weapon_path, "Bullet_pp.png")).convert_alpha()
-        self.bullet_sprites["PP"] = pygame.transform.scale(self.bullet_sprites["PP"], (16, 16))
+        self.bullet_sprites["PP"] = pygame.transform.scale(self.bullet_sprites["PP"], (32, 32))
 
         self.gun_sprites["AK"] = pygame.image.load(os.path.join(weapon_path, "AK.png")).convert_alpha()
         self.gun_sprites["AK"] = pygame.transform.scale(self.gun_sprites["AK"], (32, 20))
         self.bullet_sprites["AK"] = pygame.image.load(os.path.join(weapon_path, "Bullet_AK.png")).convert_alpha()
-        self.bullet_sprites["AK"] = pygame.transform.scale(self.bullet_sprites["AK"], (16, 16))
+        self.bullet_sprites["AK"] = pygame.transform.scale(self.bullet_sprites["AK"], (32, 32))
 
         self.current_gun_sprite = self.gun_sprites["gun"]
         self.current_bullet_sprite = self.bullet_sprites["gun"]

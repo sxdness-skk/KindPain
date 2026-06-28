@@ -37,7 +37,6 @@ class Enemy(pygame.sprite.Sprite):
         self.target = None
         self.aggro_range = 500
         self.attack_range = 50
-        self.alive = True
 
     def load_animations(self):
         enemies_path = os.path.join(BASE_PATH, "Enemies")
@@ -56,7 +55,7 @@ class Enemy(pygame.sprite.Sprite):
             self.attack_frames.append(img)
 
     def update(self, player, platforms):
-        if not self.alive:
+        if self.hp <= 0:
             pickup = self.drop_pickup()
             self.kill()
             return pickup
@@ -159,8 +158,6 @@ class Enemy(pygame.sprite.Sprite):
 
     def take_damage(self, damage):
         self.hp -= damage
-        if self.hp <= 0:
-            self.alive = False
 
     def drop_pickup(self):
         from pickup import Pickup

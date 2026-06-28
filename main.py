@@ -7,13 +7,19 @@ from player import Player
 from platform import Platform
 from levels import level_list
 from Enemy import Enemy
-from pickup import Pickup
 
 current_level = 1
 wave = 1
 wave_spawned = False
-door = None
-weapon_pickup = None
+wave_timer = 0
+spawn_positions = []
+door_active = False
+door_position = (0, 0)
+weapon_pickup_active = False
+weapon_pickup_position = (0, 0)
+weapon_pickup_type = ""
+all_waves_complete = False
+
 
 
 def get_empty_positions(level_num):
@@ -30,63 +36,54 @@ def get_empty_positions(level_num):
     return empty_positions
 
 
-def spawn_wave():
-    global wave_spawned
-    enemies.empty()
-
+def start_wave_timer():
+    global wave_timer, spawn_positions
     positions = get_empty_positions(current_level)
     random.shuffle(positions)
 
-    count = 0
     if wave == 1:
         count = 3
+        wave_timer = FPS * 5
     elif wave == 2:
         count = 4
+        wave_timer = FPS * 3
     elif wave == 3:
         count = 6
+        wave_timer = FPS * 3
 
-    spawned = 0
-    for x, y in positions:
-        if spawned >= count:
-            break
+    spawn_positions = positions[:count]
+
+
+def spawn_wave():
+    global wave_spawned, spawn_positions
+    enemies.empty()
+
+    for x, y in spawn_positions:
         enemy = Enemy(x, y)
         enemies.add(enemy)
-        spawned += 1
 
+    spawn_positions = []
     wave_spawned = True
 
 
-def spawn_door():
-    global door, weapon_pickup
-    door = pygame.sprite.Sprite()
-    door.image = pygame.Surface((TILE_SIZE, TILE_SIZE))
-    door.image.fill((139, 90, 43))
-    door.rect = door.image.get_rect()
-    door.rect.centerx = level_width // 2
-    door.rect.centery = level_height // 2
+def spawn_door_and_weapon():
+    global door_active, door_position, weapon_pickup_active, weapon_pickup_position, weapon_pickup_type
+
+    door_position = (level_width // 2, level_height // 2)
+    door_active = True
+
+    weapon_pickup_position = (level_width // 2, level_height // 2 - 80)
+    weapon_pickup_active = True
 
     if current_level == 1:
-        weapon_pickup = WeaponPickup(level_width // 2, level_height // 2 - TILE_SIZE, "PP")
+        weapon_pickup_type = "PP"
     elif current_level == 2:
-        weapon_pickup = WeaponPickup(level_width // 2, level_height // 2 - TILE_SIZE, "AK")
-    else:
-        weapon_pickup = None
-
-
-class WeaponPickup(pygame.sprite.Sprite):
-    def __init__(self, x, y, weapon_type):
-        super().__init__()
-        self.weapon_type = weapon_type
-        weapon_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun")
-        self.image = pygame.image.load(os.path.join(weapon_path, f"{weapon_type}.png")).convert_alpha()
-        self.image = pygame.transform.scale(self.image, (48, 30))
-        self.rect = self.image.get_rect()
-        self.rect.centerx = x
-        self.rect.centery = y
+        weapon_pickup_type = "AK"
 
 
 def load_level(level_num):
-    global level_width, level_height, platforms, enemies, pickups, wave, wave_spawned, door, weapon_pickup
+    global level_width, level_height, platforms, enemies, pickups, wave, wave_spawned, wave_timer, spawn_positions
+    global door_active, door_position, weapon_pickup_active, weapon_pickup_position, weapon_pickup_type, all_waves_complete
     level_data = level_list[level_num]
     platforms.empty()
     enemies.empty()
@@ -108,8 +105,14 @@ def load_level(level_num):
 
     wave = 1
     wave_spawned = False
-    door = None
-    weapon_pickup = None
+    wave_timer = 0
+    spawn_positions = []
+    door_active = False
+    door_position = (0, 0)
+    weapon_pickup_active = False
+    weapon_pickup_position = (0, 0)
+    weapon_pickup_type = ""
+    all_waves_complete = False
 
 
 pygame.init()
@@ -123,9 +126,18 @@ crosshair_img = pygame.image.load(crosshair_path).convert_alpha()
 crosshair_img = pygame.transform.scale(crosshair_img, (32, 32))
 
 
+pp_gun_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun", "PP.png")
+pp_gun_img = pygame.image.load(pp_gun_path).convert_alpha()
+pp_gun_img = pygame.transform.scale(pp_gun_img, (48, 30))
+
+ak_gun_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun", "AK.png")
+ak_gun_img = pygame.image.load(ak_gun_path).convert_alpha()
+ak_gun_img = pygame.transform.scale(ak_gun_img, (48, 30))
+
 def main():
     global current_level, player, platforms, enemies, pickups, level_width, level_height
-    global wave, wave_spawned, door, weapon_pickup
+    global wave, wave_spawned, wave_timer, spawn_positions, door_active, door_position
+    global weapon_pickup_active, weapon_pickup_position, weapon_pickup_type, all_waves_complete
 
     player = Player(100, 400)
     platforms = pygame.sprite.Group()
@@ -160,6 +172,7 @@ def main():
                     player.switch_weapon(1)
                 if event.key == pygame.K_3:
                     player.switch_weapon(2)
+
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 player.shoot(mouse_x, mouse_y, camera_x, camera_y)
@@ -178,33 +191,43 @@ def main():
             if keys[pygame.K_DOWN] or keys[pygame.K_s]:
                 player.vel_y = PLAYER_SPEED
 
-        if not wave_spawned:
-            spawn_wave()
+        if not wave_spawned and not all_waves_complete and wave_timer == 0:
+            start_wave_timer()
+
+        if wave_timer > 0:
+            wave_timer -= 1
+            if wave_timer == 0:
+                spawn_wave()
 
         for enemy in enemies:
             pickup = enemy.update(player, platforms)
-            if pickup is not None:
+            if pickup:
                 pickups.add(pickup)
 
         for pickup in pickups:
             pickup.update()
 
-        if len(enemies) == 0 and wave_spawned:
+        if len(enemies) == 0 and wave_spawned and not all_waves_complete:
             wave += 1
             wave_spawned = False
             if wave > 3:
-                spawn_door()
+                all_waves_complete = True
+                spawn_door_and_weapon()
 
-        if weapon_pickup and player.alive and player.rect.colliderect(weapon_pickup.rect):
-            player.set_weapon(weapon_pickup.weapon_type)
-            weapon_pickup = None
+        if door_active:
+            door_rect = pygame.Rect(door_position[0] - 30, door_position[1] - 30, 60, 60)
+            if player.alive and player.rect.colliderect(door_rect) and not weapon_pickup_active:
+                current_level += 1
+                if current_level > len(level_list):
+                    current_level = 1
+                load_level(current_level)
+                player.respawn()
 
-        if door and player.alive and player.rect.colliderect(door.rect):
-            current_level += 1
-            if current_level > len(level_list):
-                current_level = 1
-            load_level(current_level)
-            player.respawn()
+        if weapon_pickup_active:
+            weapon_rect = pygame.Rect(weapon_pickup_position[0] - 20, weapon_pickup_position[1] - 20, 40, 40)
+            if player.alive and player.rect.colliderect(weapon_rect):
+                player.set_weapon(weapon_pickup_type)
+                weapon_pickup_active = False
 
         player.update(platforms, enemies, pickups)
 
@@ -223,11 +246,40 @@ def main():
         for platform in platforms:
             screen.blit(platform.image, (platform.rect.x - camera_x, platform.rect.y - camera_y))
 
+        for x, y in spawn_positions:
+            circle_x = x - camera_x
+            circle_y = y - camera_y
+            radius = 30 + int(10 * (1 - wave_timer / (FPS * 3)))
+            alpha = 150
+            circle_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            pygame.draw.circle(circle_surf, (255, 50, 50, alpha), (radius, radius), radius)
+            pygame.draw.circle(circle_surf, (255, 100, 100, alpha), (radius, radius), radius - 4, 2)
+            screen.blit(circle_surf, (circle_x - radius, circle_y - radius))
+
         for enemy in enemies:
             screen.blit(enemy.image, (enemy.rect.x - camera_x, enemy.rect.y - camera_y))
 
         for pickup in pickups:
             screen.blit(pickup.image, (pickup.rect.x - camera_x, pickup.rect.y - camera_y))
+
+        if door_active:
+            door_x = door_position[0] - camera_x
+            door_y = door_position[1] - camera_y
+            door_surf = pygame.Surface((60, 60), pygame.SRCALPHA)
+            pygame.draw.rect(door_surf, (255, 215, 0, 180), (0, 0, 60, 60))
+            pygame.draw.rect(door_surf, (255, 255, 255), (0, 0, 60, 60), 3)
+            font = pygame.font.Font(None, 20)
+            text = font.render("NEXT", True, (255, 255, 255))
+            door_surf.blit(text, (8, 20))
+            screen.blit(door_surf, (door_x - 30, door_y - 30))
+
+            if weapon_pickup_active:
+                wp_x = weapon_pickup_position[0] - camera_x
+                wp_y = weapon_pickup_position[1] - camera_y
+                if weapon_pickup_type == "PP":
+                    screen.blit(pp_gun_img, (wp_x - 24, wp_y - 15))
+                elif weapon_pickup_type == "AK":
+                    screen.blit(ak_gun_img, (wp_x - 24, wp_y - 15))
 
         if player.alive:
             screen.blit(player.image, (player.rect.x - camera_x, player.rect.y - camera_y))
@@ -239,11 +291,11 @@ def main():
         for bullet in player.bullets:
             screen.blit(bullet.image, (bullet.rect.x - camera_x, bullet.rect.y - camera_y))
 
-        if weapon_pickup:
-            screen.blit(weapon_pickup.image, (weapon_pickup.rect.x - camera_x, weapon_pickup.rect.y - camera_y))
-
-        if door:
-            screen.blit(door.image, (door.rect.x - camera_x, door.rect.y - camera_y))
+        if wave_timer > 0 and wave == 1:
+            font = pygame.font.Font(None, 36)
+            timer_text = font.render(f"До начала: {wave_timer // FPS + 1}", True, (255, 255, 255))
+            text_rect = timer_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+            screen.blit(timer_text, text_rect)
 
         player.draw_ui(screen)
 

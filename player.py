@@ -296,8 +296,8 @@ class Player(pygame.sprite.Sprite):
         start_pos = (gun_x - camera_x, gun_y - camera_y)
         end_pos = (end_x - camera_x, end_y - camera_y)
 
-        pygame.draw.line(screen, (255, 255, 50), start_pos, end_pos, 3)
-        pygame.draw.line(screen, (255, 255, 200), start_pos, end_pos, 1)
+        pygame.draw.line(screen, ("Blue"), start_pos, end_pos, 3)
+        pygame.draw.line(screen, ("Blue"), start_pos, end_pos, 1)
 
     def draw_gun(self, screen, camera_x, camera_y):
         if self.current_gun_sprite is None:

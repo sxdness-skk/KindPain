@@ -66,16 +66,15 @@ class Enemy(pygame.sprite.Sprite):
                 img = pygame.transform.scale(img, (64, 64))
                 self.attack_frames.append(img)
 
+
         elif self.enemy_type == "heavy":
             self.idle_frame = pygame.image.load(os.path.join(enemies_path, "Enemy21.png")).convert_alpha()
             self.idle_frame = pygame.transform.scale(self.idle_frame, (96, 96))
-
-            for i in range(1, 8):
+            for i in range(1, 7):
                 img = pygame.image.load(os.path.join(enemies_path, f"Enemy2{i}.png")).convert_alpha()
                 img = pygame.transform.scale(img, (96, 96))
                 self.walk_frames.append(img)
-
-            for i in range(8, 14):
+            for i in range(7, 14):
                 img = pygame.image.load(os.path.join(enemies_path, f"Enemy2{i}.png")).convert_alpha()
                 img = pygame.transform.scale(img, (96, 96))
                 self.attack_frames.append(img)
@@ -206,9 +205,10 @@ class Enemy(pygame.sprite.Sprite):
         else:
             self.image = self.idle_frame
 
-        if self.direction == "left":
+        if self.direction == "right" and self.enemy_type == "normal":
             self.image = pygame.transform.flip(self.image, True, False)
-
+        elif self.direction == "left" and self.enemy_type == "heavy":
+            self.image = pygame.transform.flip(self.image, True, False)
     def check_collision(self, platforms, direction):
         for platform in platforms:
             if self.rect.colliderect(platform.rect):

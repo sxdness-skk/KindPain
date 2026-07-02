@@ -1,5 +1,6 @@
 import pygame
 import os
+import math
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, ENERGY_REGEN_RATE
 
 ATTACK_COOLDOWN = 15
@@ -8,8 +9,10 @@ BASE_PATH = os.path.join(os.path.dirname(__file__), "Image")
 
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, sound_manager=None):
         super().__init__()
+
+        self.sound_manager = sound_manager
 
         self.animations = {"left": [], "right": [], "up": [], "down": []}
         self.load_animations()
@@ -42,6 +45,7 @@ class Player(pygame.sprite.Sprite):
         self.death_timer = 0
         self.death_duration = 120
 
+        self.shoot_hold = False
         self.weapon_type = "gun"
         self.gun_sprites = {}
         self.bullet_sprites = {}
@@ -50,6 +54,8 @@ class Player(pygame.sprite.Sprite):
         self.gun_offset = (0, 0)
         self.weapon_energy_cost = 0
         self.unlocked_weapons = ["gun"]
+        self.laser_active = False
+        self.laser_angle = 0
         self.load_weapons()
 
     def load_animations(self):
@@ -78,13 +84,11 @@ class Player(pygame.sprite.Sprite):
 
         self.gun_sprites["PP"] = pygame.image.load(os.path.join(weapon_path, "PP.png")).convert_alpha()
         self.gun_sprites["PP"] = pygame.transform.scale(self.gun_sprites["PP"], (32, 20))
-        self.bullet_sprites["PP"] = pygame.image.load(os.path.join(weapon_path, "Bullet_pp.png")).convert_alpha()
-        self.bullet_sprites["PP"] = pygame.transform.scale(self.bullet_sprites["PP"], (32, 32))
 
         self.gun_sprites["AK"] = pygame.image.load(os.path.join(weapon_path, "AK.png")).convert_alpha()
         self.gun_sprites["AK"] = pygame.transform.scale(self.gun_sprites["AK"], (32, 20))
         self.bullet_sprites["AK"] = pygame.image.load(os.path.join(weapon_path, "Bullet_AK.png")).convert_alpha()
-        self.bullet_sprites["AK"] = pygame.transform.scale(self.bullet_sprites["AK"], (32, 32))
+        self.bullet_sprites["AK"] = pygame.transform.scale(self.bullet_sprites["AK"], (16, 16))
 
         self.current_gun_sprite = self.gun_sprites["gun"]
         self.current_bullet_sprite = self.bullet_sprites["gun"]
@@ -94,9 +98,10 @@ class Player(pygame.sprite.Sprite):
         if weapon_type in self.gun_sprites:
             self.weapon_type = weapon_type
             self.current_gun_sprite = self.gun_sprites[weapon_type]
-            self.current_bullet_sprite = self.bullet_sprites[weapon_type]
+            if weapon_type in self.bullet_sprites:
+                self.current_bullet_sprite = self.bullet_sprites[weapon_type]
             if weapon_type == "PP":
-                self.weapon_energy_cost = 2
+                self.weapon_energy_cost = 30
             elif weapon_type == "AK":
                 self.weapon_energy_cost = 5
             else:
@@ -108,6 +113,10 @@ class Player(pygame.sprite.Sprite):
         weapons = ["gun", "PP", "AK"]
         if slot < len(weapons) and weapons[slot] in self.unlocked_weapons:
             self.set_weapon(weapons[slot])
+
+    def stop_shooting(self):
+        self.shoot_hold = False
+        self.laser_active = False
 
     def update(self, platforms, enemies=None, pickups=None):
         if not self.alive:
@@ -135,8 +144,12 @@ class Player(pygame.sprite.Sprite):
                 if self.rect.colliderect(pickup.rect):
                     if pickup.pickup_type == "hp":
                         self.hp = min(self.hp + pickup.heal_amount, self.max_hp)
+                        if self.sound_manager:
+                            self.sound_manager.play("heal")
                     elif pickup.pickup_type == "armor":
                         self.armor = min(self.armor + pickup.armor_amount, self.max_armor)
+                        if self.sound_manager:
+                            self.sound_manager.play("shield")
                     pickup.kill()
 
     def update_animation(self):
@@ -191,29 +204,100 @@ class Player(pygame.sprite.Sprite):
         if not self.alive:
             return None
 
-        if self.attack_cooldown > 0:
+        if self.weapon_type == "PP":
+            if not self.shoot_hold:
+                self.laser_active = False
+                return None
+            if self.energy <= 0:
+                self.laser_active = False
+                return None
+
+            if not self.laser_active and self.sound_manager:
+                self.sound_manager.play("laser")
+
+            self.laser_active = True
+            gun_x = self.rect.x + self.gun_offset[0] + 28
+            gun_y = self.rect.y + self.gun_offset[1] + 10
+            dx = (target_x + camera_x) - gun_x
+            dy = (target_y + camera_y) - gun_y
+            self.laser_angle = math.atan2(dy, dx)
+            self.energy = max(0, self.energy - self.weapon_energy_cost / 60)
+            if self.energy <= 0:
+                self.laser_active = False
             return None
+        else:
+            self.laser_active = False
+            if self.attack_cooldown > 0:
+                return None
+            if self.energy < self.weapon_energy_cost:
+                return None
 
-        if self.weapon_energy_cost > 0 and self.energy < self.weapon_energy_cost:
-            return None
+            if self.sound_manager:
+                self.sound_manager.play("gun")
 
-        self.attack_cooldown = ATTACK_COOLDOWN
-        self.energy -= self.weapon_energy_cost
+            if self.weapon_type == "AK":
+                self.attack_cooldown = ATTACK_COOLDOWN
+                bullet_damage = 3
+            else:
+                self.attack_cooldown = ATTACK_COOLDOWN
+                bullet_damage = 1
 
-        gun_x = self.rect.x + self.gun_offset[0] + 16
+            self.energy -= self.weapon_energy_cost
+
+            gun_x = self.rect.x + self.gun_offset[0] + 16
+            gun_y = self.rect.y + self.gun_offset[1] + 10
+            dx = (target_x + camera_x) - gun_x
+            dy = (target_y + camera_y) - gun_y
+            dist = (dx ** 2 + dy ** 2) ** 0.5
+            if dist == 0:
+                dist = 1
+            dx /= dist
+            dy /= dist
+
+            bullet = Bullet(gun_x, gun_y, dx, dy, self.current_bullet_sprite, bullet_damage)
+            self.bullets.add(bullet)
+            return bullet
+
+    def draw_laser(self, screen, camera_x, camera_y, platforms, enemies):
+        if not self.laser_active:
+            return
+
+        gun_x = self.rect.x + self.gun_offset[0] + 28
         gun_y = self.rect.y + self.gun_offset[1] + 10
 
-        dx = (target_x + camera_x) - gun_x
-        dy = (target_y + camera_y) - gun_y
-        dist = (dx ** 2 + dy ** 2) ** 0.5
-        if dist == 0:
-            dist = 1
-        dx /= dist
-        dy /= dist
+        max_length = 1000
+        end_x = gun_x + math.cos(self.laser_angle) * max_length
+        end_y = gun_y + math.sin(self.laser_angle) * max_length
 
-        bullet = Bullet(gun_x, gun_y, dx, dy, self.current_bullet_sprite)
-        self.bullets.add(bullet)
-        return bullet
+        hit_point = None
+
+        for i in range(0, max_length, 4):
+            check_x = gun_x + math.cos(self.laser_angle) * i
+            check_y = gun_y + math.sin(self.laser_angle) * i
+            check_rect = pygame.Rect(check_x - 1, check_y - 1, 2, 2)
+
+            for platform in platforms:
+                if platform.rect.colliderect(check_rect):
+                    hit_point = (check_x, check_y)
+                    break
+
+            if enemies:
+                for enemy in enemies:
+                    if enemy.rect.collidepoint(check_x, check_y):
+                        enemy.take_damage(0.01)
+                        break
+
+            if hit_point:
+                break
+
+        if hit_point:
+            end_x, end_y = hit_point
+
+        start_pos = (gun_x - camera_x, gun_y - camera_y)
+        end_pos = (end_x - camera_x, end_y - camera_y)
+
+        pygame.draw.line(screen, (255, 255, 50), start_pos, end_pos, 3)
+        pygame.draw.line(screen, (255, 255, 200), start_pos, end_pos, 1)
 
     def draw_gun(self, screen, camera_x, camera_y):
         if self.current_gun_sprite is None:
@@ -240,12 +324,16 @@ class Player(pygame.sprite.Sprite):
         if self.armor > 0:
             if self.armor >= damage:
                 self.armor -= damage
+                if self.sound_manager:
+                    self.sound_manager.play("beatplayer")
                 return False
             else:
                 damage -= self.armor
                 self.armor = 0
 
         self.hp -= damage
+        if self.sound_manager:
+            self.sound_manager.play("beatplayer")
         if self.hp <= 0:
             self.hp = 0
             self.die()
@@ -256,6 +344,8 @@ class Player(pygame.sprite.Sprite):
         self.death_timer = 0
         self.vel_x = 0
         self.vel_y = 0
+        if self.sound_manager:
+            self.sound_manager.play("gameover")
 
     def is_death_animation_done(self):
         return self.death_timer >= self.death_duration
@@ -268,6 +358,7 @@ class Player(pygame.sprite.Sprite):
         self.death_timer = 0
         self.vel_x = 0
         self.vel_y = 0
+        self.laser_active = False
 
     def draw_ui(self, screen):
         font = pygame.font.Font(None, 24)
@@ -283,7 +374,7 @@ class Player(pygame.sprite.Sprite):
 
 
 class Bullet(pygame.sprite.Sprite):
-    def __init__(self, x, y, dx, dy, sprite):
+    def __init__(self, x, y, dx, dy, sprite, damage=1):
         super().__init__()
 
         self.image = sprite.copy()
@@ -295,7 +386,7 @@ class Bullet(pygame.sprite.Sprite):
         self.dx = dx * speed
         self.dy = dy * speed
 
-        self.damage = 1
+        self.damage = damage
 
     def update(self, platforms=None, enemies=None):
         self.rect.x += self.dx

@@ -5,8 +5,9 @@ import random
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, PLAYER_SPEED, TILE_SIZE
 from player import Player
 from platform import Platform
-from levels import level_list
+from levels import level_list, spawn_points
 from Enemy import Enemy
+from sound import SoundManager
 
 current_level = 1
 wave = 1
@@ -19,7 +20,6 @@ weapon_pickup_active = False
 weapon_pickup_position = (0, 0)
 weapon_pickup_type = ""
 all_waves_complete = False
-
 
 
 def get_empty_positions(level_num):
@@ -38,28 +38,39 @@ def get_empty_positions(level_num):
 
 def start_wave_timer():
     global wave_timer, spawn_positions
-    positions = get_empty_positions(current_level)
-    random.shuffle(positions)
+
+    if current_level in spawn_points and wave in spawn_points[current_level]:
+        spawn_positions = spawn_points[current_level][wave].copy()
+    else:
+        positions = get_empty_positions(current_level)
+        random.shuffle(positions)
+        if wave == 1:
+            count = 3
+        elif wave == 2:
+            count = 4
+        elif wave == 3:
+            count = 6
+        spawn_positions = positions[:count]
 
     if wave == 1:
-        count = 3
         wave_timer = FPS * 5
     elif wave == 2:
-        count = 4
         wave_timer = FPS * 3
     elif wave == 3:
-        count = 6
         wave_timer = FPS * 3
-
-    spawn_positions = positions[:count]
 
 
 def spawn_wave():
     global wave_spawned, spawn_positions
     enemies.empty()
 
-    for x, y in spawn_positions:
-        enemy = Enemy(x, y)
+    for i, (x, y) in enumerate(spawn_positions):
+        if current_level >= 2 and wave == 2 and i == 0:
+            enemy = Enemy(x, y, "heavy", sound_manager)
+        elif current_level >= 2 and wave == 3 and i < 3:
+            enemy = Enemy(x, y, "heavy", sound_manager)
+        else:
+            enemy = Enemy(x, y, "normal", sound_manager)
         enemies.add(enemy)
 
     spawn_positions = []
@@ -120,11 +131,15 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("KindPain")
 clock = pygame.time.Clock()
 
+sound_manager = SoundManager()
+pygame.mixer.music.load(os.path.join("Sound", "background.mp3"))
+pygame.mixer.music.set_volume(0.8)
+pygame.mixer.music.play(-1)  # -1 = зациклить
+
 pygame.mouse.set_visible(False)
 crosshair_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun", "Crosshair.png")
 crosshair_img = pygame.image.load(crosshair_path).convert_alpha()
 crosshair_img = pygame.transform.scale(crosshair_img, (32, 32))
-
 
 pp_gun_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun", "PP.png")
 pp_gun_img = pygame.image.load(pp_gun_path).convert_alpha()
@@ -134,12 +149,13 @@ ak_gun_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon
 ak_gun_img = pygame.image.load(ak_gun_path).convert_alpha()
 ak_gun_img = pygame.transform.scale(ak_gun_img, (48, 30))
 
+
 def main():
     global current_level, player, platforms, enemies, pickups, level_width, level_height
     global wave, wave_spawned, wave_timer, spawn_positions, door_active, door_position
     global weapon_pickup_active, weapon_pickup_position, weapon_pickup_type, all_waves_complete
 
-    player = Player(100, 400)
+    player = Player(100, 400, sound_manager)
     platforms = pygame.sprite.Group()
     enemies = pygame.sprite.Group()
     pickups = pygame.sprite.Group()
@@ -166,6 +182,7 @@ def main():
                         current_level = 1
                     load_level(current_level)
                     player.respawn()
+                    sound_manager.play("nextlvl")
                 if event.key == pygame.K_1:
                     player.switch_weapon(0)
                 if event.key == pygame.K_2:
@@ -174,8 +191,10 @@ def main():
                     player.switch_weapon(2)
 
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_x, mouse_y = pygame.mouse.get_pos()
-                player.shoot(mouse_x, mouse_y, camera_x, camera_y)
+                player.shoot_hold = True
+
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                player.stop_shooting()
 
         keys = pygame.key.get_pressed()
         player.vel_x = 0
@@ -190,6 +209,10 @@ def main():
                 player.vel_y = -PLAYER_SPEED
             if keys[pygame.K_DOWN] or keys[pygame.K_s]:
                 player.vel_y = PLAYER_SPEED
+
+        if player.shoot_hold:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            player.shoot(mouse_x, mouse_y, camera_x, camera_y)
 
         if not wave_spawned and not all_waves_complete and wave_timer == 0:
             start_wave_timer()
@@ -219,7 +242,12 @@ def main():
             if player.alive and player.rect.colliderect(door_rect) and not weapon_pickup_active:
                 current_level += 1
                 if current_level > len(level_list):
+                    sound_manager.play("win")
                     current_level = 1
+                elif current_level == 3:
+                    sound_manager.play("toboss")
+                else:
+                    sound_manager.play("nextlvl")
                 load_level(current_level)
                 player.respawn()
 
@@ -228,6 +256,7 @@ def main():
             if player.alive and player.rect.colliderect(weapon_rect):
                 player.set_weapon(weapon_pickup_type)
                 weapon_pickup_active = False
+                sound_manager.play("newgun")
 
         player.update(platforms, enemies, pickups)
 
@@ -273,17 +302,18 @@ def main():
             door_surf.blit(text, (8, 20))
             screen.blit(door_surf, (door_x - 30, door_y - 30))
 
-            if weapon_pickup_active:
-                wp_x = weapon_pickup_position[0] - camera_x
-                wp_y = weapon_pickup_position[1] - camera_y
-                if weapon_pickup_type == "PP":
-                    screen.blit(pp_gun_img, (wp_x - 24, wp_y - 15))
-                elif weapon_pickup_type == "AK":
-                    screen.blit(ak_gun_img, (wp_x - 24, wp_y - 15))
+        if weapon_pickup_active:
+            wp_x = weapon_pickup_position[0] - camera_x
+            wp_y = weapon_pickup_position[1] - camera_y
+            if weapon_pickup_type == "PP":
+                screen.blit(pp_gun_img, (wp_x - 24, wp_y - 15))
+            elif weapon_pickup_type == "AK":
+                screen.blit(ak_gun_img, (wp_x - 24, wp_y - 15))
 
         if player.alive:
             screen.blit(player.image, (player.rect.x - camera_x, player.rect.y - camera_y))
             player.draw_gun(screen, camera_x, camera_y)
+            player.draw_laser(screen, camera_x, camera_y, platforms, enemies)
         else:
             if (player.death_timer // 10) % 2 == 0:
                 screen.blit(player.image, (player.rect.x - camera_x, player.rect.y - camera_y))

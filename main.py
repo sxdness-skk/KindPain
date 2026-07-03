@@ -122,6 +122,9 @@ pygame.display.set_caption("KindPain")
 clock = pygame.time.Clock()
 
 sound_manager = SoundManager()
+pygame.mixer.music.load(os.path.join(os.path.dirname(__file__), "Sound", "background.mp3"))
+pygame.mixer.music.set_volume(0.5)
+pygame.mixer.music.play(-1)
 
 pygame.mouse.set_visible(False)
 crosshair_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun", "Crosshair.png")
@@ -288,7 +291,7 @@ def main():
             pygame.draw.rect(door_surf, (255, 215, 0, 180), (0, 0, 60, 60))
             pygame.draw.rect(door_surf, (255, 255, 255), (0, 0, 60, 60), 3)
             font = pygame.font.Font(None, 20)
-            text = font.render("NEXT", True, (255, 255, 255))
+            text = font.render("GO!", True, (255, 255, 255))
             door_surf.blit(text, (8, 20))
             screen.blit(door_surf, (door_x - 30, door_y - 30))
 

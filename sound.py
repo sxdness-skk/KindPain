@@ -24,6 +24,7 @@ class SoundManager:
         self.sounds["shield"] = pygame.mixer.Sound(os.path.join(BASE_PATH, "shield.mp3"))
         self.sounds["toboss"] = pygame.mixer.Sound(os.path.join(BASE_PATH, "toboss.mp3"))
         self.sounds["win"] = pygame.mixer.Sound(os.path.join(BASE_PATH, "win.mp3"))
+        self.sounds["ak"] = pygame.mixer.Sound(os.path.join(BASE_PATH, "ak.mp3"))
 
         for sound in self.sounds.values():
             sound.set_volume(0.3)

@@ -8,6 +8,7 @@ from platform import Platform
 from levels import level_list, spawn_points
 from Enemy import Enemy
 from sound import SoundManager
+from menu import show_menu
 
 current_level = 1
 wave = 1
@@ -38,7 +39,6 @@ def get_empty_positions(level_num):
 
 def start_wave_timer():
     global wave_timer, spawn_positions
-
     if current_level in spawn_points and wave in spawn_points[current_level]:
         spawn_positions = spawn_points[current_level][wave].copy()
     else:
@@ -51,7 +51,6 @@ def start_wave_timer():
         elif wave == 3:
             count = 6
         spawn_positions = positions[:count]
-
     if wave == 1:
         wave_timer = FPS * 5
     elif wave == 2:
@@ -63,7 +62,6 @@ def start_wave_timer():
 def spawn_wave():
     global wave_spawned, spawn_positions
     enemies.empty()
-
     for i, (x, y) in enumerate(spawn_positions):
         if current_level >= 2 and wave == 2 and i == 0:
             enemy = Enemy(x, y, "heavy", sound_manager)
@@ -72,20 +70,16 @@ def spawn_wave():
         else:
             enemy = Enemy(x, y, "normal", sound_manager)
         enemies.add(enemy)
-
     spawn_positions = []
     wave_spawned = True
 
 
 def spawn_door_and_weapon():
     global door_active, door_position, weapon_pickup_active, weapon_pickup_position, weapon_pickup_type
-
     door_position = (level_width // 2, level_height // 2)
     door_active = True
-
     weapon_pickup_position = (level_width // 2, level_height // 2 - 80)
     weapon_pickup_active = True
-
     if current_level == 1:
         weapon_pickup_type = "PP"
     elif current_level == 2:
@@ -99,7 +93,6 @@ def load_level(level_num):
     platforms.empty()
     enemies.empty()
     pickups.empty()
-
     for row in range(len(level_data)):
         for col in range(len(level_data[row])):
             type = level_data[row][col]
@@ -107,13 +100,10 @@ def load_level(level_num):
                 x = col * TILE_SIZE
                 y = row * TILE_SIZE
                 platforms.add(Platform(x, y, TILE_SIZE, TILE_SIZE, type))
-
     level_width = len(level_data[0]) * TILE_SIZE
     level_height = len(level_data) * TILE_SIZE
-
     player.rect.x = level_width // 2
     player.rect.y = level_height // 2
-
     wave = 1
     wave_spawned = False
     wave_timer = 0
@@ -132,9 +122,6 @@ pygame.display.set_caption("KindPain")
 clock = pygame.time.Clock()
 
 sound_manager = SoundManager()
-pygame.mixer.music.load(os.path.join("Sound", "background.mp3"))
-pygame.mixer.music.set_volume(0.8)
-pygame.mixer.music.play(-1)  # -1 = зациклить
 
 pygame.mouse.set_visible(False)
 crosshair_path = os.path.join(os.path.dirname(__file__), "Image", "Player", "Weapon", "Gun", "Crosshair.png")
@@ -154,6 +141,10 @@ def main():
     global current_level, player, platforms, enemies, pickups, level_width, level_height
     global wave, wave_spawned, wave_timer, spawn_positions, door_active, door_position
     global weapon_pickup_active, weapon_pickup_position, weapon_pickup_type, all_waves_complete
+
+    show_menu(screen, clock)
+
+    pygame.mouse.set_visible(False)
 
     player = Player(100, 400, sound_manager)
     platforms = pygame.sprite.Group()
@@ -266,7 +257,6 @@ def main():
 
         camera_x = player.rect.centerx - SCREEN_WIDTH // 2
         camera_y = player.rect.centery - SCREEN_HEIGHT // 2
-
         camera_x = max(0, min(camera_x, level_width - SCREEN_WIDTH))
         camera_y = max(0, min(camera_y, level_height - SCREEN_HEIGHT))
 

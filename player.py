@@ -238,6 +238,8 @@ class Player(pygame.sprite.Sprite):
             if self.weapon_type == "AK":
                 self.attack_cooldown = ATTACK_COOLDOWN
                 bullet_damage = 3
+                if self.sound_manager:
+                    self.sound_manager.play("ak")
             else:
                 self.attack_cooldown = ATTACK_COOLDOWN
                 bullet_damage = 1
